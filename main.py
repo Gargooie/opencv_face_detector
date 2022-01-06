@@ -1,27 +1,45 @@
+#Hand-Pose-Estimation in 5 Minutes
 import cv2
+import mediapipe as mp
+mp_drawing = mp.solutions.drawing_utils
+mp_hands = mp.solutions.hands
+import time
 
-face_cascade_db = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-eye_cascade_db = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
-url = "http://192.168.43.86:4747/video?640x480"
-capti = cv2.VideoCapture(url)
+# For static images:
 
-while True:
-    succ, img = capti.read()
+## For webcam input:
+cap = cv2.VideoCapture(0)
+prevTime = 0
+with mp_hands.Hands(
+    min_detection_confidence=0.5,       #Detection Sensitivity
+    min_tracking_confidence=0.5) as hands:
+  while cap.isOpened():
+    success, image = cap.read()
+    if not success:
+      print("Ignoring empty camera frame.")
+      # If loading a video, use 'break' instead of 'continue'.
+      continue
 
-    # img=cv2.imread("1.jpg")
-    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Flip the image horizontally for a later selfie-view display, and convert
+    # the BGR image to RGB.
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    # To improve performance, optionally mark the image as not writeable to
+    # pass by reference.
+    image.flags.writeable = False
+    results = hands.process(image)
 
-    fazi = face_cascade_db.detectMultiScale(img_gray, 1.1, 5)
-    for (x, y, w, h) in fazi:
-        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        img_gray_fazio = img_gray[y:y + h, x:x + w]
-        ochi = eye_cascade_db.detectMultiScale(img_gray_fazio, 1.1, 5)
-        for (ex,ey,ew,eh) in ochi:
-            cv2.rectangle(img, (x+ex, y+ey), (x+ex + ew, y+ey + eh), (255, 0, 0), 2)
-
-    cv2.imshow("rezki", img)
-    if cv2.waitKey(1) & 0xff == ord('q'):
-        break
-
-capti.release()
-cv2.destroyAllWindows()
+    # Draw the hand annotations on the image.
+    image.flags.writeable = True
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    if results.multi_hand_landmarks:
+      for hand_landmarks in results.multi_hand_landmarks:
+        mp_drawing.draw_landmarks(
+            image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+    currTime = time.time()
+    fps = 1 / (currTime - prevTime)
+    prevTime = currTime
+    cv2.putText(image, f'FPS: {int(fps)}', (20, 70), cv2.FONT_HERSHEY_PLAIN, 3, (0, 196, 255), 2)
+    cv2.imshow('MediaPipe Hands', image)
+    if cv2.waitKey(5) & 0xFF == 27:
+      break
+cap.release()
